@@ -25,6 +25,9 @@ interface PlayerStore {
   toggleRepeat: () => void;
   addToQueue: (song: Song) => void;
 
+  nowPlayingOpen: boolean;
+  toggleNowPlaying: () => void;
+
   _setCurrentTime: (t: number) => void;
   _setDuration: (d: number) => void;
   _setIsPlaying: (p: boolean) => void;
@@ -128,6 +131,9 @@ export const usePlayerStore = create<PlayerStore>((set, get) => ({
     set(s => ({ repeat: s.repeat === 'off' ? 'all' : s.repeat === 'all' ? 'one' : 'off' })),
 
   addToQueue: (song) => set(s => ({ queue: [...s.queue, song] })),
+
+  nowPlayingOpen: false,
+  toggleNowPlaying: () => set(s => ({ nowPlayingOpen: !s.nowPlayingOpen })),
 
   _setCurrentTime: (t) => set({ currentTime: t }),
   _setDuration: (d) => set({ duration: d }),

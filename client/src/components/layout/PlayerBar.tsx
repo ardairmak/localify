@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1,
@@ -7,7 +7,6 @@ import {
 import { usePlayerStore } from '../../store/playerStore';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { coverUrl, getLiked, likeSong, unlikeSong } from '../../api';
-import NowPlayingView from '../player/NowPlayingView';
 
 function formatTime(secs: number) {
   if (!secs || isNaN(secs)) return '0:00';
@@ -77,9 +76,8 @@ function VolumeControl() {
 }
 
 export default function PlayerBar() {
-  const { currentSong, isPlaying, shuffle, repeat, togglePlay, next, previous, toggleShuffle, toggleRepeat } = usePlayerStore();
+  const { currentSong, isPlaying, shuffle, repeat, togglePlay, next, previous, toggleShuffle, toggleRepeat, toggleNowPlaying } = usePlayerStore();
   const qc = useQueryClient();
-  const [showNowPlaying, setShowNowPlaying] = useState(false);
 
   const { data: likedData } = useQuery({ queryKey: ['liked'], queryFn: getLiked });
   const likedIds = new Set(likedData?.songs.map(s => s.id) ?? []);
@@ -108,17 +106,15 @@ export default function PlayerBar() {
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
 
   return (
-    <>
-    {showNowPlaying && <NowPlayingView onClose={() => setShowNowPlaying(false)} />}
     <div className="h-[90px] bg-sp-card border-t border-sp-elevated flex items-center px-4 gap-4 flex-shrink-0 m-2 mt-0 rounded-lg">
       {/* Track info */}
       <div className="flex items-center gap-3 w-[30%] min-w-0">
         {currentSong ? (
           <>
             <button
-              onClick={() => setShowNowPlaying(true)}
+              onClick={toggleNowPlaying}
               className="w-14 h-14 flex-shrink-0 rounded overflow-hidden bg-sp-elevated hover:opacity-80 transition-opacity group relative"
-              title="Open now playing"
+              title="Now Playing"
             >
               {currentSong.cover_art ? (
                 <img src={coverUrl(currentSong.cover_art)!} alt="" className="w-full h-full object-cover" />
@@ -190,6 +186,5 @@ export default function PlayerBar() {
         <VolumeControl />
       </div>
     </div>
-    </>
   );
 }
