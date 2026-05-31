@@ -9,6 +9,7 @@ import playlistsRouter from './routes/playlists';
 import likedRouter from './routes/liked';
 import libraryRouter from './routes/library';
 import searchRouter from './routes/search';
+import downloadRouter from './routes/download';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -27,6 +28,7 @@ app.use('/api/playlists', playlistsRouter);
 app.use('/api/liked', likedRouter);
 app.use('/api/library', libraryRouter);
 app.use('/api/search', searchRouter);
+app.use('/api/download', downloadRouter);
 
 // Health check
 app.get('/api/health', (_req, res) => {

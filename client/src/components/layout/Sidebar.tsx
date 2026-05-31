@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Home, Search, Music2, Users, Disc3, ListMusic,
-  Heart, Settings, Plus, AudioLines, Library,
+  Heart, Settings, Plus, AudioLines, Library, Download,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { getPlaylists, coverUrl } from '../../api';
@@ -51,6 +51,7 @@ function CollapsedSidebar({ onToggle }: { onToggle: () => void }) {
         {iconBtn('Songs', <Music2 size={20} />, '/songs')}
         {iconBtn('Artists', <Users size={20} />, '/artists')}
         {iconBtn('Albums', <Disc3 size={20} />, '/albums')}
+        {iconBtn('Download', <Download size={20} />, '/download')}
 
         {/* Liked Songs — purple gradient tile */}
         <NavLink
@@ -164,6 +165,7 @@ function ExpandedSidebar({ onToggle }: { onToggle: () => void }) {
             <NavItem to="/songs" icon={Music2} label="Songs" />
             <NavItem to="/artists" icon={Users} label="Artists" />
             <NavItem to="/albums" icon={Disc3} label="Albums" />
+            <NavItem to="/download" icon={Download} label="Download" />
             <NavItem to="/liked" icon={Heart} label="Liked Songs" />
           </nav>
 

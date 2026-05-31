@@ -103,5 +103,22 @@ export const getScanStatus = () => req<ScanStatus>('/library/scan/status');
 // Search
 export const search = (q: string) => req<SearchResults>(`/search?q=${encodeURIComponent(q)}`);
 
+// Download
+export interface YtSearchResult {
+  id: string; title: string; channel: string;
+  duration: number; thumbnail: string; url: string; viewCount: number;
+}
+export interface DownloadJob {
+  id: string; url: string;
+  status: 'queued' | 'downloading' | 'converting' | 'scanning' | 'done' | 'error';
+  progress: number; speed: string; eta: string;
+  title: string; filename: string | null; error: string | null; startedAt: string;
+}
+export const checkYtDlp = () => req<{ available: boolean }>('/download/check');
+export const searchYouTube = (q: string) => req<{ results: YtSearchResult[] }>(`/download/search?q=${encodeURIComponent(q)}`);
+export const startDownload = (url: string) => req<{ id: string }>('/download', { method: 'POST', body: JSON.stringify({ url }) });
+export const getDownloadStatus = (id: string) => req<DownloadJob>(`/download/status/${id}`);
+export const getDownloadJobs = () => req<{ jobs: DownloadJob[] }>('/download/jobs');
+
 // Cover art URL helper
 export const coverUrl = (filename: string | null) => (filename ? `/api/covers/${filename}` : null);

@@ -211,6 +211,12 @@ async function processSong(filePath: string): Promise<void> {
   });
 }
 
+// ── Public: scan a single file (used after download) ─────────────────────────
+
+export async function processSingleFile(filePath: string): Promise<void> {
+  return processSong(filePath);
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function startScan(musicFolder: string): Promise<void> {

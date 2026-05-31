@@ -12,6 +12,7 @@ import PlaylistDetail from './pages/PlaylistDetail';
 import LikedSongs from './pages/LikedSongs';
 import Search from './pages/Search';
 import Settings from './pages/Settings';
+import Download from './pages/Download';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="liked" element={<LikedSongs />} />
             <Route path="search" element={<Search />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="download" element={<Download />} />
           </Route>
         </Routes>
       </BrowserRouter>
