@@ -1,9 +1,9 @@
-import { Play, Heart, Music2, Pencil } from 'lucide-react';
-import { useState } from 'react';
+import { Play, Heart, Music2, Pencil, MoreHorizontal, Plus, Check } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePlayerStore } from '../../store/playerStore';
-import { coverUrl, likeSong, unlikeSong } from '../../api';
+import { coverUrl, likeSong, unlikeSong, getPlaylists, addToPlaylist } from '../../api';
 import type { Song } from '../../types';
 import SongEditor from '../ui/SongEditor';
 
@@ -12,6 +12,61 @@ function formatDuration(secs: number | null) {
   const m = Math.floor(secs / 60);
   const s = Math.floor(secs % 60);
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function AddToPlaylistMenu({ song, onClose }: { song: Song; onClose: () => void }) {
+  const qc = useQueryClient();
+  const ref = useRef<HTMLDivElement>(null);
+  const [added, setAdded] = useState<number | null>(null);
+
+  const { data } = useQuery({ queryKey: ['playlists'], queryFn: getPlaylists });
+
+  const addMut = useMutation({
+    mutationFn: (playlistId: number) => addToPlaylist(playlistId, song.id),
+    onSuccess: (_, playlistId) => {
+      qc.invalidateQueries({ queryKey: ['playlist', String(playlistId)] });
+      setAdded(playlistId);
+      setTimeout(onClose, 800);
+    },
+  });
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute right-0 top-full mt-1 z-50 bg-sp-elevated border border-sp-hover rounded-lg shadow-2xl py-1 min-w-[200px] max-w-[260px]"
+      onClick={e => e.stopPropagation()}
+    >
+      <p className="px-4 py-2 text-xs font-semibold text-sp-faint uppercase tracking-wider">Add to playlist</p>
+
+      {data?.playlists.length === 0 && (
+        <p className="px-4 py-2 text-sm text-sp-muted">No playlists yet</p>
+      )}
+
+      {data?.playlists.map(pl => (
+        <button
+          key={pl.id}
+          onClick={() => !addMut.isPending && addMut.mutate(pl.id)}
+          className="w-full flex items-center gap-3 px-4 py-2 text-sm text-sp-text hover:bg-sp-hover transition-colors text-left"
+        >
+          {added === pl.id ? (
+            <Check size={14} className="text-sp-green flex-shrink-0" />
+          ) : (
+            <Plus size={14} className="text-sp-muted flex-shrink-0" />
+          )}
+          <span className="truncate">{pl.name}</span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 interface Props {
@@ -26,6 +81,7 @@ interface Props {
 export default function SongRow({ song, index, queue, isLiked, showAlbum = true, showCover = false }: Props) {
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const { playSong, currentSong, isPlaying } = usePlayerStore();
   const qc = useQueryClient();
   const isActive = currentSong?.id === song.id;
@@ -48,13 +104,13 @@ export default function SongRow({ song, index, queue, isLiked, showAlbum = true,
 
   return (
     <div
-      className={`grid items-center px-4 py-2 rounded-md group cursor-pointer transition-colors
+      className={`grid items-center px-4 py-2 rounded-md group cursor-pointer transition-colors relative
         ${isActive ? 'bg-sp-elevated' : 'hover:bg-sp-elevated'}
         ${showAlbum ? 'grid-cols-[auto_1fr_1fr_auto_auto]' : 'grid-cols-[auto_1fr_auto_auto]'}
       `}
       style={{ gap: '12px' }}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => { setHovered(false); }}
       onDoubleClick={() => playSong(song, queue)}
     >
       {/* Index / play indicator */}
@@ -116,21 +172,33 @@ export default function SongRow({ song, index, queue, isLiked, showAlbum = true,
         </div>
       )}
 
-      {/* Actions: like + edit */}
-      <div className="flex items-center gap-2">
+      {/* Actions: like + edit + more */}
+      <div className="flex items-center gap-1">
         <button
           onClick={handleLike}
-          className={`transition-colors ${isLiked ? 'text-sp-green' : 'text-sp-muted opacity-0 group-hover:opacity-100 hover:text-sp-text'}`}
+          className={`p-1 transition-colors ${isLiked ? 'text-sp-green' : 'text-sp-muted opacity-0 group-hover:opacity-100 hover:text-sp-text'}`}
         >
-          <Heart size={16} fill={isLiked ? 'currentColor' : 'none'} />
+          <Heart size={15} fill={isLiked ? 'currentColor' : 'none'} />
         </button>
         <button
           onClick={e => { e.stopPropagation(); setEditing(true); }}
-          className="text-sp-muted opacity-0 group-hover:opacity-100 hover:text-sp-text transition-colors"
+          className="p-1 text-sp-muted opacity-0 group-hover:opacity-100 hover:text-sp-text transition-colors"
           title="Edit info"
         >
-          <Pencil size={14} />
+          <Pencil size={13} />
         </button>
+        <div className="relative">
+          <button
+            onClick={e => { e.stopPropagation(); setShowMenu(v => !v); }}
+            className="p-1 text-sp-muted opacity-0 group-hover:opacity-100 hover:text-sp-text transition-colors"
+            title="More options"
+          >
+            <MoreHorizontal size={15} />
+          </button>
+          {showMenu && (
+            <AddToPlaylistMenu song={song} onClose={() => setShowMenu(false)} />
+          )}
+        </div>
       </div>
 
       {/* Duration */}
