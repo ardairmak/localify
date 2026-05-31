@@ -2,7 +2,6 @@
 
 A local music player built with React and Node.js. Point it at a folder of audio files and it gives you a Spotify-style interface — browsing by songs, artists, and albums, playlists, liked songs, and a YouTube-to-MP3 downloader that imports straight into your library.
 
-![Three-panel layout with sidebar, library, and now playing](https://via.placeholder.com/800x400?text=screenshot)
 
 ## Stack
 
