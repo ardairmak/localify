@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Home, Search, Music2, Users, Disc3, ListMusic, Heart, Settings, Plus, AudioLines } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { getPlaylists } from '../../api';
+import { getPlaylists, coverUrl } from '../../api';
 
 const navItems = [
   { to: '/', icon: Home, label: 'Home', end: true },
@@ -91,7 +91,11 @@ export default function Sidebar() {
                     }`
                   }
                 >
-                  <ListMusic size={16} className="flex-shrink-0" />
+                  {pl.cover_art ? (
+                    <img src={coverUrl(pl.cover_art)!} alt="" className="w-4 h-4 rounded object-cover flex-shrink-0" />
+                  ) : (
+                    <ListMusic size={16} className="flex-shrink-0" />
+                  )}
                   <span className="truncate">{pl.name}</span>
                 </NavLink>
               ))}

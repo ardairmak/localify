@@ -1,5 +1,18 @@
 import { Router, Request, Response } from 'express';
-import db from '../db';
+import multer from 'multer';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import db, { COVERS_DIR } from '../db';
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Only image files are allowed'));
+  },
+});
 
 const router = Router();
 
@@ -127,6 +140,38 @@ router.delete('/:id/tracks/:songId', (req: Request, res: Response) => {
   }
 
   db.prepare(`UPDATE playlists SET updated_at = datetime('now') WHERE id = ?`).run(req.params.id);
+  res.status(204).send();
+});
+
+// POST /api/playlists/:id/cover
+router.post('/:id/cover', upload.single('cover'), (req: Request, res: Response) => {
+  const playlist = db.prepare('SELECT * FROM playlists WHERE id = ?').get(req.params.id);
+  if (!playlist) return res.status(404).json({ error: 'Playlist not found' });
+  if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+
+  const hash = crypto.createHash('md5').update(req.file.buffer).digest('hex');
+  const ext = (req.file.originalname.split('.').pop() ?? 'jpg').toLowerCase();
+  const filename = `playlist_${hash}.${ext}`;
+  const filePath = path.join(COVERS_DIR, filename);
+
+  if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, req.file.buffer);
+  }
+
+  db.prepare(`UPDATE playlists SET cover_art = ?, updated_at = datetime('now') WHERE id = ?`)
+    .run(filename, req.params.id);
+
+  res.json({ cover_art: filename });
+});
+
+// DELETE /api/playlists/:id/cover
+router.delete('/:id/cover', (req: Request, res: Response) => {
+  const playlist = db.prepare('SELECT * FROM playlists WHERE id = ?').get(req.params.id);
+  if (!playlist) return res.status(404).json({ error: 'Playlist not found' });
+
+  db.prepare(`UPDATE playlists SET cover_art = NULL, updated_at = datetime('now') WHERE id = ?`)
+    .run(req.params.id);
+
   res.status(204).send();
 });
 

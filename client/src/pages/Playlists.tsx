@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Plus, ListMusic } from 'lucide-react';
-import { getPlaylists, createPlaylist } from '../api';
+import { getPlaylists, createPlaylist, coverUrl } from '../api';
 import Spinner from '../components/ui/Spinner';
 
 function CreateModal({ onClose }: { onClose: () => void }) {
@@ -87,8 +87,12 @@ export default function Playlists() {
               to={`/playlists/${pl.id}`}
               className="bg-sp-elevated hover:bg-sp-hover rounded-lg p-4 transition-colors group block"
             >
-              <div className="aspect-square rounded bg-sp-card flex items-center justify-center mb-3">
-                <ListMusic size={40} className="text-sp-faint" />
+              <div className="aspect-square rounded overflow-hidden bg-sp-card flex items-center justify-center mb-3">
+                {pl.cover_art ? (
+                  <img src={coverUrl(pl.cover_art)!} alt={pl.name} className="w-full h-full object-cover" />
+                ) : (
+                  <ListMusic size={40} className="text-sp-faint" />
+                )}
               </div>
               <p className="text-sm font-semibold text-sp-text truncate">{pl.name}</p>
               <p className="text-xs text-sp-muted mt-0.5">{pl.track_count} songs</p>

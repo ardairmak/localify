@@ -66,6 +66,17 @@ export const addToPlaylist = (playlistId: number, songId: number) =>
 export const removeFromPlaylist = (playlistId: number, songId: number) =>
   req<void>(`/playlists/${playlistId}/tracks/${songId}`, { method: 'DELETE' });
 
+export const uploadPlaylistCover = async (playlistId: number, file: File) => {
+  const form = new FormData();
+  form.append('cover', file);
+  const res = await fetch(`${BASE}/playlists/${playlistId}/cover`, { method: 'POST', body: form });
+  if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
+  return res.json() as Promise<{ cover_art: string }>;
+};
+
+export const removePlaylistCover = (playlistId: number) =>
+  req<void>(`/playlists/${playlistId}/cover`, { method: 'DELETE' });
+
 // Liked songs
 export const getLiked = () => req<{ songs: Song[] }>('/liked');
 
