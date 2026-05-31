@@ -5,7 +5,6 @@ import db, { COVERS_DIR } from '../db';
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.flac', '.aac', '.ogg', '.wav', '.m4a', '.opus', '.wma']);
 
-// Noise patterns common in YouTube-converted filenames
 const YOUTUBE_NOISE = [
   /\s*[\[(](official\s*(music\s*)?video|official\s*audio|official\s*lyric\s*video|lyrics?|lyric\s*video)[)\]]\s*/gi,
   /\s*[\[(](hq|hd|4k|1080p|720p|320kbps?)[)\]]\s*/gi,
@@ -17,29 +16,68 @@ const YOUTUBE_NOISE = [
 
 function parseFilename(rawName: string): { title: string; artist: string | null } {
   let name = rawName;
-
-  // Strip noise suffixes
-  for (const re of YOUTUBE_NOISE) {
-    name = name.replace(re, ' ');
-  }
+  for (const re of YOUTUBE_NOISE) name = name.replace(re, ' ');
   name = name.trim().replace(/\s{2,}/g, ' ');
 
-  // Try "Artist - Title" split — common YouTube format
-  // First segment is treated as artist only when it's clearly shorter (e.g. "Rihanna - Where Have You Been")
   const match = name.match(/^(.+?)\s*[-–—]\s*(.+)$/);
   if (match) {
     const left = match[1].trim();
     const right = match[2].trim();
-    // Heuristic: shorter left = likely artist name, longer = song title with dash in it
     if (left.split(' ').length <= 3 && right.split(' ').length > left.split(' ').length) {
       return { artist: left, title: right };
     }
-    // Otherwise treat full cleaned name as title, leave artist unset
     return { artist: null, title: name };
   }
-
   return { title: name, artist: null };
 }
+
+// ── iTunes cover art lookup ───────────────────────────────────────────────────
+
+interface ItunesResult {
+  artworkUrl100?: string;
+  trackName?: string;
+  artistName?: string;
+}
+
+async function fetchItunesCover(title: string, artist: string | null): Promise<Buffer | null> {
+  try {
+    const term = [artist, title].filter(Boolean).join(' ');
+    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=5&media=music`;
+
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+
+    const data = await res.json() as { results: ItunesResult[] };
+    if (!data.results?.length) return null;
+
+    // Pick the best match: prefer a result whose artist matches
+    const result = data.results.find(r =>
+      artist && r.artistName?.toLowerCase().includes(artist.toLowerCase())
+    ) ?? data.results[0];
+
+    const artUrl = result.artworkUrl100;
+    if (!artUrl) return null;
+
+    // Upgrade to 600×600
+    const highRes = artUrl.replace('100x100bb', '600x600bb');
+    const imgRes = await fetch(highRes, { signal: AbortSignal.timeout(8000) });
+    if (!imgRes.ok) return null;
+
+    return Buffer.from(await imgRes.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+async function saveBuffer(buf: Buffer, ext = 'jpg'): Promise<string> {
+  const hash = crypto.createHash('md5').update(buf).digest('hex');
+  const filename = `${hash}.${ext}`;
+  const dest = path.join(COVERS_DIR, filename);
+  if (!fs.existsSync(dest)) fs.writeFileSync(dest, buf);
+  return filename;
+}
+
+// ── Scan status ───────────────────────────────────────────────────────────────
 
 interface ScanStatus {
   isScanning: boolean;
@@ -63,83 +101,85 @@ export function getScanStatus(): ScanStatus {
   return { ...scanStatus };
 }
 
+// ── File discovery ────────────────────────────────────────────────────────────
+
 function findAudioFiles(dir: string): string[] {
   const results: string[] = [];
   let entries: fs.Dirent[];
-
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch {
     return results;
   }
-
   for (const entry of entries) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       results.push(...findAudioFiles(fullPath));
-    } else if (entry.isFile()) {
-      const ext = path.extname(entry.name).toLowerCase();
-      if (AUDIO_EXTENSIONS.has(ext)) {
-        results.push(fullPath);
-      }
+    } else if (entry.isFile() && AUDIO_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+      results.push(fullPath);
     }
   }
-
   return results;
 }
+
+// ── Song processing ───────────────────────────────────────────────────────────
 
 async function processSong(filePath: string): Promise<void> {
   const mm = await import('music-metadata');
 
   let stat: fs.Stats;
-  try {
-    stat = fs.statSync(filePath);
-  } catch {
-    return;
-  }
+  try { stat = fs.statSync(filePath); } catch { return; }
 
   let metadata;
   try {
     metadata = await mm.parseFile(filePath, { duration: true, skipCovers: false });
   } catch {
-    // Still insert with basic file info
     metadata = { common: {}, format: {}, native: {} };
   }
 
   const { common, format } = metadata;
 
-  // Extract and save cover art
+  // 1. Try embedded cover art
   let coverArtFilename: string | null = null;
-  const pictures = common.picture;
-  if (pictures && pictures.length > 0) {
-    const pic = pictures[0];
-    const hash = crypto.createHash('md5').update(pic.data).digest('hex');
-    coverArtFilename = `${hash}.jpg`;
-    const coverPath = path.join(COVERS_DIR, coverArtFilename);
-    if (!fs.existsSync(coverPath)) {
-      fs.writeFileSync(coverPath, pic.data);
-    }
+  const pictures = (common as { picture?: { data: Buffer }[] }).picture;
+  if (pictures?.length) {
+    coverArtFilename = await saveBuffer(pictures[0].data);
   }
 
-  // For untagged files (e.g. YouTube-converted MP3s), parse the filename
+  // 2. Parse filename for untagged files
   const rawFilename = path.basename(filePath, path.extname(filePath));
   const parsed = (!common.title && !common.artist) ? parseFilename(rawFilename) : null;
 
   const title = common.title || parsed?.title || rawFilename;
-  const artist = common.artist || common.albumartist || parsed?.artist || null;
-  const albumArtist = common.albumartist || common.artist || parsed?.artist || null;
+  const artist = common.artist || (common as { albumartist?: string }).albumartist || parsed?.artist || null;
+  const albumArtist = (common as { albumartist?: string }).albumartist || common.artist || parsed?.artist || null;
   const album = common.album || null;
-  const year = common.year || null;
-  const genre = common.genre ? common.genre[0] : null;
+  const year = (common as { year?: number }).year || null;
+  const genre = (common as { genre?: string[] }).genre?.[0] ?? null;
   const duration = format.duration || null;
-  const trackNumber = common.track?.no || null;
-  const discNumber = common.disk?.no || null;
+  const trackNumber = (common as { track?: { no?: number } }).track?.no || null;
+  const discNumber = (common as { disk?: { no?: number } }).disk?.no || null;
   const fileSize = stat.size;
   const fileFormat = format.container || path.extname(filePath).slice(1).toUpperCase();
   const bitrate = format.bitrate ? Math.round(format.bitrate / 1000) : null;
   const sampleRate = format.sampleRate || null;
 
-  const upsert = db.prepare(`
+  // 3. If still no cover, check if DB already has one before hitting iTunes
+  if (!coverArtFilename) {
+    const existing = db.prepare('SELECT cover_art FROM songs WHERE file_path = ?').get(filePath) as { cover_art: string | null } | undefined;
+    if (existing?.cover_art) {
+      coverArtFilename = existing.cover_art; // keep existing
+    } else {
+      // 4. Fetch from iTunes
+      const buf = await fetchItunesCover(title, artist);
+      if (buf) {
+        coverArtFilename = await saveBuffer(buf);
+        console.log(`  ✓ iTunes cover: ${title}`);
+      }
+    }
+  }
+
+  db.prepare(`
     INSERT INTO songs (
       title, artist, album_artist, album, year, genre, duration,
       track_number, disc_number, file_path, file_size, format,
@@ -163,52 +203,28 @@ async function processSong(filePath: string): Promise<void> {
       format = @format,
       bitrate = @bitrate,
       sample_rate = @sampleRate,
-      cover_art = @coverArt
-  `);
-
-  upsert.run({
-    title,
-    artist,
-    albumArtist,
-    album,
-    year,
-    genre,
-    duration,
-    trackNumber,
-    discNumber,
-    filePath,
-    fileSize,
-    format: fileFormat,
-    bitrate,
-    sampleRate,
-    coverArt: coverArtFilename,
+      cover_art = COALESCE(@coverArt, cover_art)
+  `).run({
+    title, artist, albumArtist, album, year, genre, duration,
+    trackNumber, discNumber, filePath, fileSize, format: fileFormat,
+    bitrate, sampleRate, coverArt: coverArtFilename,
   });
 }
 
-export async function startScan(musicFolder: string): Promise<void> {
-  if (scanStatus.isScanning) {
-    return;
-  }
+// ── Public API ────────────────────────────────────────────────────────────────
 
+export async function startScan(musicFolder: string): Promise<void> {
+  if (scanStatus.isScanning) return;
   if (!fs.existsSync(musicFolder)) {
     throw new Error(`Music folder does not exist: ${musicFolder}`);
   }
 
-  scanStatus = {
-    isScanning: true,
-    total: 0,
-    processed: 0,
-    errors: 0,
-    lastScanAt: null,
-    currentFile: null,
-  };
+  scanStatus = { isScanning: true, total: 0, processed: 0, errors: 0, lastScanAt: null, currentFile: null };
 
-  // Run scan asynchronously
   (async () => {
     try {
       const files = findAudioFiles(musicFolder);
       scanStatus.total = files.length;
-
       for (const file of files) {
         scanStatus.currentFile = path.basename(file);
         try {
@@ -219,7 +235,6 @@ export async function startScan(musicFolder: string): Promise<void> {
           scanStatus.errors++;
         }
       }
-
       scanStatus.lastScanAt = new Date().toISOString();
     } catch (err) {
       console.error('Scan error:', err);
