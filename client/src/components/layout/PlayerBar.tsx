@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1,
@@ -7,6 +7,7 @@ import {
 import { usePlayerStore } from '../../store/playerStore';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { coverUrl, getLiked, likeSong, unlikeSong } from '../../api';
+import NowPlayingView from '../player/NowPlayingView';
 
 function formatTime(secs: number) {
   if (!secs || isNaN(secs)) return '0:00';
@@ -78,6 +79,7 @@ function VolumeControl() {
 export default function PlayerBar() {
   const { currentSong, isPlaying, shuffle, repeat, togglePlay, next, previous, toggleShuffle, toggleRepeat } = usePlayerStore();
   const qc = useQueryClient();
+  const [showNowPlaying, setShowNowPlaying] = useState(false);
 
   const { data: likedData } = useQuery({ queryKey: ['liked'], queryFn: getLiked });
   const likedIds = new Set(likedData?.songs.map(s => s.id) ?? []);
@@ -106,12 +108,18 @@ export default function PlayerBar() {
   const RepeatIcon = repeat === 'one' ? Repeat1 : Repeat;
 
   return (
+    <>
+    {showNowPlaying && <NowPlayingView onClose={() => setShowNowPlaying(false)} />}
     <div className="h-[90px] bg-sp-card border-t border-sp-elevated flex items-center px-4 gap-4 flex-shrink-0 m-2 mt-0 rounded-lg">
       {/* Track info */}
       <div className="flex items-center gap-3 w-[30%] min-w-0">
         {currentSong ? (
           <>
-            <div className="w-14 h-14 flex-shrink-0 rounded overflow-hidden bg-sp-elevated">
+            <button
+              onClick={() => setShowNowPlaying(true)}
+              className="w-14 h-14 flex-shrink-0 rounded overflow-hidden bg-sp-elevated hover:opacity-80 transition-opacity group relative"
+              title="Open now playing"
+            >
               {currentSong.cover_art ? (
                 <img src={coverUrl(currentSong.cover_art)!} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -119,7 +127,7 @@ export default function PlayerBar() {
                   <Music2 size={24} className="text-sp-faint" />
                 </div>
               )}
-            </div>
+            </button>
             <div className="min-w-0">
               <p className="text-sm font-medium text-sp-text truncate">{currentSong.title}</p>
               <p className="text-xs text-sp-muted truncate">{currentSong.artist ?? 'Unknown Artist'}</p>
@@ -182,5 +190,6 @@ export default function PlayerBar() {
         <VolumeControl />
       </div>
     </div>
+    </>
   );
 }
