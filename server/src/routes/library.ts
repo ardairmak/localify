@@ -1,4 +1,7 @@
 import { Router, Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 import db from '../db';
 import { startScan, getScanStatus } from '../services/scanner';
 
@@ -73,6 +76,39 @@ router.get('/scan/status', (_req: Request, res: Response) => {
   `).get() as { total_songs: number; total_artists: number; total_albums: number };
 
   res.json({ ...status, stats });
+});
+
+// GET /api/library/browse?path=/some/dir
+router.get('/browse', (req: Request, res: Response) => {
+  const requestedPath = (req.query.path as string) || os.homedir();
+
+  let resolvedPath: string;
+  try {
+    resolvedPath = path.resolve(requestedPath);
+    fs.accessSync(resolvedPath, fs.constants.R_OK);
+  } catch {
+    return res.status(400).json({ error: 'Cannot access directory' });
+  }
+
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(resolvedPath, { withFileTypes: true });
+  } catch {
+    return res.status(400).json({ error: 'Cannot read directory' });
+  }
+
+  const dirs = entries
+    .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+    .map(e => ({ name: e.name, path: path.join(resolvedPath, e.name) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const parent = path.dirname(resolvedPath);
+
+  res.json({
+    current: resolvedPath,
+    parent: parent !== resolvedPath ? parent : null,
+    dirs,
+  });
 });
 
 export default router;

@@ -3,11 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FolderOpen, RefreshCw, CheckCircle, Music2 } from 'lucide-react';
 import { getLibrarySettings, saveLibrarySettings, startScan, getScanStatus } from '../api';
 import Spinner from '../components/ui/Spinner';
+import FolderPicker from '../components/ui/FolderPicker';
 
 export default function Settings() {
   const qc = useQueryClient();
   const [folderPath, setFolderPath] = useState('');
   const [polling, setPolling] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
 
   const { data: settings } = useQuery({
     queryKey: ['library-settings'],
@@ -72,8 +74,14 @@ export default function Settings() {
                   value={folderPath}
                   onChange={e => setFolderPath(e.target.value)}
                   placeholder="/Users/you/Music"
-                  className="w-full bg-sp-hover border border-sp-faint rounded-lg pl-9 pr-4 py-3 text-sm focus:outline-none focus:border-sp-text"
+                  className="w-full bg-sp-hover border border-sp-faint rounded-lg pl-9 pr-28 py-3 text-sm focus:outline-none focus:border-sp-text"
                 />
+                <button
+                  onClick={() => setShowPicker(true)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 text-xs font-semibold text-sp-muted hover:text-sp-text bg-sp-elevated hover:bg-sp-hover rounded-md transition-colors"
+                >
+                  Browse…
+                </button>
               </div>
               <button
                 onClick={() => saveMut.mutate()}
@@ -125,6 +133,14 @@ export default function Settings() {
           </div>
         </div>
       </section>
+
+      {showPicker && (
+        <FolderPicker
+          initialPath={folderPath || undefined}
+          onSelect={(p) => { setFolderPath(p); setShowPicker(false); }}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
 
       {/* Stats */}
       {scanStatus?.stats && (

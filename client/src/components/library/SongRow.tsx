@@ -1,10 +1,11 @@
-import { Play, Heart, Music2, MoreHorizontal } from 'lucide-react';
+import { Play, Heart, Music2, Pencil } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePlayerStore } from '../../store/playerStore';
 import { coverUrl, likeSong, unlikeSong } from '../../api';
 import type { Song } from '../../types';
+import SongEditor from '../ui/SongEditor';
 
 function formatDuration(secs: number | null) {
   if (!secs) return '--:--';
@@ -24,6 +25,7 @@ interface Props {
 
 export default function SongRow({ song, index, queue, isLiked, showAlbum = true, showCover = false }: Props) {
   const [hovered, setHovered] = useState(false);
+  const [editing, setEditing] = useState(false);
   const { playSong, currentSong, isPlaying } = usePlayerStore();
   const qc = useQueryClient();
   const isActive = currentSong?.id === song.id;
@@ -114,16 +116,27 @@ export default function SongRow({ song, index, queue, isLiked, showAlbum = true,
         </div>
       )}
 
-      {/* Like */}
-      <button
-        onClick={handleLike}
-        className={`transition-colors ${isLiked ? 'text-sp-green' : 'text-sp-muted opacity-0 group-hover:opacity-100 hover:text-sp-text'}`}
-      >
-        <Heart size={16} fill={isLiked ? 'currentColor' : 'none'} />
-      </button>
+      {/* Actions: like + edit */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleLike}
+          className={`transition-colors ${isLiked ? 'text-sp-green' : 'text-sp-muted opacity-0 group-hover:opacity-100 hover:text-sp-text'}`}
+        >
+          <Heart size={16} fill={isLiked ? 'currentColor' : 'none'} />
+        </button>
+        <button
+          onClick={e => { e.stopPropagation(); setEditing(true); }}
+          className="text-sp-muted opacity-0 group-hover:opacity-100 hover:text-sp-text transition-colors"
+          title="Edit info"
+        >
+          <Pencil size={14} />
+        </button>
+      </div>
 
       {/* Duration */}
       <span className="text-sm text-sp-muted tabular-nums">{formatDuration(song.duration)}</span>
+
+      {editing && <SongEditor song={song} onClose={() => setEditing(false)} />}
     </div>
   );
 }

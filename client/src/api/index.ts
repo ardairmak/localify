@@ -28,6 +28,9 @@ export const getSongs = (params?: { page?: number; limit?: number; artist?: stri
 
 export const getSong = (id: number) => req<Song>(`/songs/${id}`);
 
+export const updateSong = (id: number, data: Partial<Pick<Song, 'title' | 'artist' | 'album' | 'year' | 'genre'>>) =>
+  req<Song>(`/songs/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+
 export const streamUrl = (id: number) => `/api/songs/${id}/stream`;
 
 // Artists
@@ -75,6 +78,11 @@ export const getLibrarySettings = () => req<Record<string, string>>('/library/se
 
 export const saveLibrarySettings = (music_folder_path: string) =>
   req<{ music_folder_path: string }>('/library/settings', { method: 'POST', body: JSON.stringify({ music_folder_path }) });
+
+export const browsePath = (dirPath?: string) =>
+  req<{ current: string; parent: string | null; dirs: { name: string; path: string }[] }>(
+    `/library/browse${dirPath ? `?path=${encodeURIComponent(dirPath)}` : ''}`
+  );
 
 export const startScan = (path?: string) =>
   req<{ message: string; folder: string }>('/library/scan', { method: 'POST', body: JSON.stringify({ path }) });

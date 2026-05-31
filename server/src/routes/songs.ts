@@ -49,6 +49,33 @@ router.get('/:id', (req: Request, res: Response) => {
   res.json(song);
 });
 
+// PUT /api/songs/:id — update metadata
+router.put('/:id', (req: Request, res: Response) => {
+  const song = db.prepare('SELECT * FROM songs WHERE id = ?').get(req.params.id);
+  if (!song) return res.status(404).json({ error: 'Song not found' });
+
+  const { title, artist, album, year, genre } = req.body as Record<string, string | number | null>;
+
+  db.prepare(`
+    UPDATE songs SET
+      title = COALESCE(@title, title),
+      artist = @artist,
+      album = @album,
+      year = @year,
+      genre = @genre
+    WHERE id = @id
+  `).run({
+    id: req.params.id,
+    title: title ?? null,
+    artist: artist ?? null,
+    album: album ?? null,
+    year: year ? Number(year) : null,
+    genre: genre ?? null,
+  });
+
+  res.json(db.prepare('SELECT * FROM songs WHERE id = ?').get(req.params.id));
+});
+
 // GET /api/songs/:id/stream
 router.get('/:id/stream', (req: Request, res: Response) => {
   const song = db.prepare('SELECT * FROM songs WHERE id = ?').get(req.params.id) as { file_path: string; format: string } | undefined;

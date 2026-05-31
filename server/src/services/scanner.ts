@@ -5,6 +5,42 @@ import db, { COVERS_DIR } from '../db';
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.flac', '.aac', '.ogg', '.wav', '.m4a', '.opus', '.wma']);
 
+// Noise patterns common in YouTube-converted filenames
+const YOUTUBE_NOISE = [
+  /\s*[\[(](official\s*(music\s*)?video|official\s*audio|official\s*lyric\s*video|lyrics?|lyric\s*video)[)\]]\s*/gi,
+  /\s*[\[(](hq|hd|4k|1080p|720p|320kbps?)[)\]]\s*/gi,
+  /\s*[\[(](slowed(\s*[+&]\s*(reverb|bass))?|reverb|nightcore|sped\s*up|speed\s*up|bass\s*boost(ed)?|lofi|lo-fi)[)\]]\s*/gi,
+  /\s*[\[(]feat\.?\s[^\])].*?[)\]]\s*/gi,
+  /\s*\(ft\.?\s[^)]*\)\s*/gi,
+  /\s*-?\s*topic\s*$/gi,
+];
+
+function parseFilename(rawName: string): { title: string; artist: string | null } {
+  let name = rawName;
+
+  // Strip noise suffixes
+  for (const re of YOUTUBE_NOISE) {
+    name = name.replace(re, ' ');
+  }
+  name = name.trim().replace(/\s{2,}/g, ' ');
+
+  // Try "Artist - Title" split — common YouTube format
+  // First segment is treated as artist only when it's clearly shorter (e.g. "Rihanna - Where Have You Been")
+  const match = name.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+  if (match) {
+    const left = match[1].trim();
+    const right = match[2].trim();
+    // Heuristic: shorter left = likely artist name, longer = song title with dash in it
+    if (left.split(' ').length <= 3 && right.split(' ').length > left.split(' ').length) {
+      return { artist: left, title: right };
+    }
+    // Otherwise treat full cleaned name as title, leave artist unset
+    return { artist: null, title: name };
+  }
+
+  return { title: name, artist: null };
+}
+
 interface ScanStatus {
   isScanning: boolean;
   total: number;
@@ -85,9 +121,13 @@ async function processSong(filePath: string): Promise<void> {
     }
   }
 
-  const title = common.title || path.basename(filePath, path.extname(filePath));
-  const artist = common.artist || common.albumartist || null;
-  const albumArtist = common.albumartist || common.artist || null;
+  // For untagged files (e.g. YouTube-converted MP3s), parse the filename
+  const rawFilename = path.basename(filePath, path.extname(filePath));
+  const parsed = (!common.title && !common.artist) ? parseFilename(rawFilename) : null;
+
+  const title = common.title || parsed?.title || rawFilename;
+  const artist = common.artist || common.albumartist || parsed?.artist || null;
+  const albumArtist = common.albumartist || common.artist || parsed?.artist || null;
   const album = common.album || null;
   const year = common.year || null;
   const genre = common.genre ? common.genre[0] : null;
